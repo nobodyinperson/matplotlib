@@ -241,8 +241,8 @@ if __name__ == '__main__':
     extra_args = {}
 
     # Finally, pass this all along to distutils to do the heavy lifting.
-    distrib = setup(
-        name="matplotlib",
+    setup(
+        name="python3-matplotlib" if "bdist_rpm" in sys.argv else "matplotlib",
         version=__version__,
         description="Python plotting package",
         author="John D. Hunter, Michael Droettboom",

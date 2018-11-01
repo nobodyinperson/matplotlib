@@ -19,6 +19,27 @@
 .. |NUMFocus| image:: https://img.shields.io/badge/powered%20by-NumFOCUS-orange.svg?style=flat&colorA=E1523D&colorB=007D8A
 .. _NUMFocus: http://www.numfocus.org
 
+######################
+SailfishOS RPM Package
+######################
+
+This branch can be used to build an RPM package for SailfishOS devices.
+
+You will need the following packages to build matplotlib:
+
+.. code::
+
+    gcc-c++
+    python3-devel
+    libfreetype2
+    freetype-devel
+    libpng-devel
+
+To build an RPM for SailfishOS, run
+
+.. code::
+
+   python3 setup.py bdist_rpm
 
 ##########
 Matplotlib

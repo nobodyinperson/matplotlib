@@ -28,6 +28,28 @@
 .. |GitTutorial| image:: https://img.shields.io/badge/PR-Welcome-%23FF8300.svg?
 .. _GitTutorial: https://git-scm.com/book/en/v2/GitHub-Contributing-to-a-Project
 
+######################
+SailfishOS RPM Package
+######################
+
+This branch can be used to build an RPM package for SailfishOS devices.
+
+You will need the following packages to build matplotlib:
+
+.. code::
+
+    gcc-c++
+    python3-devel
+    libfreetype2
+    freetype-devel
+    libpng-devel
+
+To build an RPM for SailfishOS, run
+
+.. code::
+
+   python3 setup.py bdist_rpm
+
 ##########
 Matplotlib
 ##########

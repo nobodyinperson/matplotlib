@@ -3,34 +3,30 @@ The matplotlib build options can be modified with a setup.cfg file. See
 setup.cfg.template for more information.
 """
 
-# NOTE: This file must remain Python 2 compatible for the foreseeable future,
-# to ensure that we error out properly for people with outdated setuptools
-# and/or pip.
+from __future__ import print_function, absolute_import
 from string import Template
+from setuptools import setup
+from setuptools.command.test import test as TestCommand
+from setuptools.command.build_ext import build_ext as BuildExtCommand
+
 import sys
 
-if sys.version_info < (3, 5):
-    error = """
-Matplotlib 3.0+ does not support Python 2.x, 3.0, 3.1, 3.2, 3.3, or 3.4.
-Beginning with Matplotlib 3.0, Python 3.5 and above is required.
-
-This may be due to an out of date pip.
-
-Make sure you have pip >= 9.0.1.
-"""
-    sys.exit(error)
-
-from io import BytesIO
+# distutils is breaking our sdists for files in symlinked dirs.
+# distutils will copy if os.link is not available, so this is a hack
+# to force copying
 import os
-from string import Template
-import urllib.request
-from zipfile import ZipFile
+try:
+    del os.link
+except AttributeError:
+    pass
 
-from setuptools import setup
-from setuptools.command.build_ext import build_ext as BuildExtCommand
-from setuptools.command.develop import develop as DevelopCommand
-from setuptools.command.install_lib import install_lib as InstallLibCommand
-from setuptools.command.test import test as TestCommand
+# This 'if' statement is needed to prevent spawning infinite processes
+# on Windows
+if __name__ == '__main__':
+    # BEFORE importing distutils, remove MANIFEST. distutils doesn't properly
+    # update it when the contents of directories change.
+    if os.path.exists('MANIFEST'):
+        os.remove('MANIFEST')
 
 # The setuptools version of sdist adds a setup.cfg file to the tree.
 # We don't want that, so we simply remove it, and it will fall back to
@@ -45,8 +41,7 @@ else:
 from distutils.dist import Distribution
 
 import setupext
-from setupext import (print_line, print_raw, print_message, print_status,
-                      download_or_cache, makedirs as _makedirs)
+from setupext import print_line, print_raw, print_message, print_status
 
 # Get the version from versioneer
 import versioneer
@@ -80,10 +75,26 @@ mpl_packages = [
     setupext.Tests(),
     setupext.Toolkits_Tests(),
     'Optional backend extensions',
-    setupext.BackendAgg(),
-    setupext.BackendTkAgg(),
+    # These backends are listed in order of preference, the first
+    # being the most preferred.  The first one that looks like it will
+    # work will be selected as the default backend.
     setupext.BackendMacOSX(),
+    setupext.BackendQt5(),
+    setupext.BackendQt4(),
+    setupext.BackendGtk3Agg(),
+    setupext.BackendGtk3Cairo(),
+    setupext.BackendGtkAgg(),
+    setupext.BackendTkAgg(),
+    setupext.BackendWxAgg(),
+    setupext.BackendGtk(),
+    setupext.BackendAgg(),
+    setupext.BackendCairo(),
     setupext.Windowing(),
+    'Optional LaTeX dependencies',
+    setupext.DviPng(),
+    setupext.Ghostscript(),
+    setupext.LaTeX(),
+    setupext.PdfToPs(),
     'Optional package data',
     setupext.Dlls(),
     ]
@@ -94,7 +105,9 @@ classifiers = [
     'Intended Audience :: Science/Research',
     'License :: OSI Approved :: Python Software Foundation License',
     'Programming Language :: Python',
+    'Programming Language :: Python :: 2.7',
     'Programming Language :: Python :: 3',
+    'Programming Language :: Python :: 3.4',
     'Programming Language :: Python :: 3.5',
     'Programming Language :: Python :: 3.6',
     'Programming Language :: Python :: 3.7',
@@ -103,9 +116,9 @@ classifiers = [
 
 
 class NoopTestCommand(TestCommand):
-    def __init__(self, dist):
+    def run(self):
         print("Matplotlib does not support running tests with "
-              "'python setup.py test'. Please run 'pytest'.")
+              "'python setup.py test'. Please run 'python tests.py'")
 
 
 class BuildExtraLibraries(BuildExtCommand):
@@ -119,51 +132,6 @@ class BuildExtraLibraries(BuildExtCommand):
 cmdclass = versioneer.get_cmdclass()
 cmdclass['test'] = NoopTestCommand
 cmdclass['build_ext'] = BuildExtraLibraries
-
-
-def _download_jquery_to(dest):
-    # Note: When bumping the jquery-ui version, also update the versions in
-    # single_figure.html and all_figures.html.
-    url = "https://jqueryui.com/resources/download/jquery-ui-1.12.1.zip"
-    sha = 'f8233674366ab36b2c34c577ec77a3d70cac75d2e387d8587f3836345c0f624d'
-    if not os.path.exists(os.path.join(dest, "jquery-ui-1.12.1")):
-        _makedirs(dest, exist_ok=True)
-        try:
-            buff = download_or_cache(url, sha)
-        except Exception:
-            raise IOError("Failed to download jquery-ui.  Please download " +
-                          "{url} and extract it to {dest}.".format(
-                              url=url, dest=dest))
-        with ZipFile(buff) as zf:
-            zf.extractall(dest)
-
-
-# Relying on versioneer's implementation detail.
-class sdist_with_jquery(cmdclass['sdist']):
-    def make_release_tree(self, base_dir, files):
-        super(sdist_with_jquery, self).make_release_tree(base_dir, files)
-        _download_jquery_to(
-            os.path.join(base_dir, "lib/matplotlib/backends/web_backend/"))
-
-
-# Affects install and bdist_wheel.
-class install_lib_with_jquery(InstallLibCommand):
-    def run(self):
-        super(install_lib_with_jquery, self).run()
-        _download_jquery_to(
-            os.path.join(self.install_dir, "matplotlib/backends/web_backend/"))
-
-
-class develop_with_jquery(DevelopCommand):
-    def run(self):
-        super(develop_with_jquery, self).run()
-        _download_jquery_to("lib/matplotlib/backends/web_backend/")
-
-
-cmdclass['sdist'] = sdist_with_jquery
-cmdclass['install_lib'] = install_lib_with_jquery
-cmdclass['develop'] = develop_with_jquery
-
 
 # One doesn't normally see `if __name__ == '__main__'` blocks in a setup.py,
 # however, this is needed on Windows to avoid creating infinite subprocesses
@@ -179,6 +147,7 @@ if __name__ == '__main__':
     package_dir = {'': 'lib'}
     install_requires = []
     setup_requires = []
+    default_backend = None
 
     # If the user just queries for information, don't bother figuring out which
     # packages to build or install.
@@ -214,6 +183,10 @@ if __name__ == '__main__':
                         required_failed.append(package)
                 else:
                     good_packages.append(package)
+                    if (isinstance(package, setupext.OptionalBackendPackage)
+                            and package.runtime_check()
+                            and default_backend is None):
+                        default_backend = package.name
         print_raw('')
 
         # Abort if any of the required packages can not be built.
@@ -244,37 +217,45 @@ if __name__ == '__main__':
             setup_requires.extend(package.get_setup_requires())
 
         # Write the default matplotlibrc file
-        with open('matplotlibrc.template') as fd:
-            template_lines = fd.read().splitlines(True)
-        backend_line_idx, = [  # Also asserts that there is a single such line.
-            idx for idx, line in enumerate(template_lines)
-            if line.startswith('#backend ')]
+        if default_backend is None:
+            default_backend = 'svg'
         if setupext.options['backend']:
-            template_lines[backend_line_idx] = (
-                'backend: {}'.format(setupext.options['backend']))
+            default_backend = setupext.options['backend']
+        with open('matplotlibrc.template') as fd:
+            template = fd.read()
+        template = Template(template)
         with open('lib/matplotlib/mpl-data/matplotlibrc', 'w') as fd:
-            fd.write(''.join(template_lines))
+            fd.write(
+                template.safe_substitute(TEMPLATE_BACKEND=default_backend))
+
+        # Build in verbose mode if requested
+        if setupext.options['verbose']:
+            for mod in ext_modules:
+                mod.extra_compile_args.append('-DVERBOSE')
 
         # Finalize the extension modules so they can get the Numpy include
         # dirs
         for mod in ext_modules:
             mod.finalize()
 
+    extra_args = {}
+
     # Finally, pass this all along to distutils to do the heavy lifting.
-    setup(
-        name="matplotlib",
+    distrib = setup(
+        name="python3-matplotlib" if "bdist_rpm" in sys.argv else "matplotlib",
         version=__version__,
         description="Python plotting package",
         author="John D. Hunter, Michael Droettboom",
         author_email="matplotlib-users@python.org",
         url="http://matplotlib.org",
         long_description="""
-        Matplotlib strives to produce publication quality 2D graphics
+        matplotlib strives to produce publication quality 2D graphics
         for interactive graphing, scientific publishing, user interface
         development and web application servers targeting multiple user
-        interfaces and hardcopy output formats.
+        interfaces and hardcopy output formats.  There is a 'pylab' mode
+        which emulates matlab graphics.
         """,
-        license="PSF",
+        license="BSD",
         packages=packages,
         namespace_packages=namespace_packages,
         platforms='any',
@@ -285,7 +266,6 @@ if __name__ == '__main__':
         classifiers=classifiers,
         download_url="http://matplotlib.org/users/installing.html",
 
-        python_requires='>=3.5',
         # List third-party Python packages that we require
         install_requires=install_requires,
         setup_requires=setup_requires,
@@ -295,4 +275,5 @@ if __name__ == '__main__':
         # check for zip safety.
         zip_safe=False,
         cmdclass=cmdclass,
+        **extra_args
     )

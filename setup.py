@@ -260,7 +260,9 @@ if __name__ == '__main__':
 
     # Finally, pass this all along to distutils to do the heavy lifting.
     setup(
-        name="matplotlib",
+        name="python3-matplotlib"
+            if "bdist_rpm" in sys.argv
+            else "matplotlib",
         version=__version__,
         description="Python plotting package",
         author="John D. Hunter, Michael Droettboom",
